@@ -151,3 +151,8 @@ export {
   ErrorType,
   RepositoryEnvironment
 };
+
+// Server exports
+export { startServer } from './server';
+export { createServerConfig, getServerUrl } from './server/config';
+export type { ServerConfig } from './server/config';

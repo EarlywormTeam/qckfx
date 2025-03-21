@@ -4,8 +4,7 @@
  */
 
 import { program } from 'commander';
-import { createAgent, createAnthropicProvider, createLogger, LogLevel, LogCategory } from './index';
-import readline from 'readline';
+import { createAgent, createAnthropicProvider, createLogger, LogLevel, LogCategory, startServer, createServerConfig, getServerUrl, ServerConfig } from './index';
 import dotenv from 'dotenv';
 import { SessionState, ToolResultEntry } from './types';
 import chalk from 'chalk';
@@ -140,7 +139,14 @@ function summarizeToolUsage(toolResults: ToolResultEntry[]): string {
 }
 
 // Chat command functionality, extracted to be reused in default command
-const startChat = async (options: { debug?: boolean, model?: string, e2bSandboxId?: string, quiet?: boolean }) => {
+const startChat = async (options: { 
+  debug?: boolean, 
+  model?: string, 
+  e2bSandboxId?: string, 
+  quiet?: boolean,
+  web?: boolean,
+  port?: number
+}) => {
   // Create a CLI logger first, so we can use it for errors
   const cliLogger = createLogger({ 
     level: options.quiet ? LogLevel.ERROR : (options.debug ? LogLevel.DEBUG : LogLevel.INFO),
@@ -155,6 +161,73 @@ const startChat = async (options: { debug?: boolean, model?: string, e2bSandboxI
     cliLogger.error('ANTHROPIC_API_KEY environment variable is required', LogCategory.SYSTEM);
     process.exit(1);
   }
+
+  // Create server config from CLI options
+  const serverConfig = createServerConfig({
+    web: options.web,
+    port: options.port,
+  });
+
+  // Start the server if enabled
+  let server: { close: () => Promise<void>; url: string } | null = null;
+  if (serverConfig.enabled) {
+    try {
+      server = await startServer(serverConfig);
+      cliLogger.info(`Web UI available at ${server.url}`, LogCategory.SYSTEM);
+    } catch (error) {
+      // Log detailed error in development mode, more concise in production
+      if (process.env.NODE_ENV === 'development') {
+        cliLogger.error(`Failed to start web UI server: ${error instanceof Error ? error.message : String(error)}`, LogCategory.SYSTEM);
+        if (error instanceof Error && 'cause' in error && error.cause) {
+          cliLogger.debug('Caused by:', error.cause, LogCategory.SYSTEM);
+        }
+      } else {
+        cliLogger.error('Failed to start web UI server. Run with NODE_ENV=development for details.', LogCategory.SYSTEM);
+      }
+    }
+  }
+
+  // Set up graceful shutdown handling
+  let isShuttingDown = false;
+  const handleShutdown = async () => {
+    if (isShuttingDown) return;
+    isShuttingDown = true;
+    
+    cliLogger.info('Shutting down...', LogCategory.SYSTEM);
+    
+    // Close the server if it was started
+    if (server) {
+      try {
+        cliLogger.debug('Closing web server...', LogCategory.SYSTEM);
+        await server.close();
+        cliLogger.debug('Web server closed', LogCategory.SYSTEM);
+      } catch (error) {
+        cliLogger.error('Error shutting down web UI server:', error, LogCategory.SYSTEM);
+      }
+    }
+
+    process.exit(0);
+  };
+
+  // Handle termination signals
+  process.on('SIGINT', handleShutdown);
+  process.on('SIGTERM', handleShutdown);
+  
+  // Handle uncaught exceptions
+  process.on('uncaughtException', async (error) => {
+    cliLogger.error('Uncaught exception:', error, LogCategory.SYSTEM);
+    
+    // Close the server if it was started
+    if (server) {
+      try {
+        await server.close();
+      } catch (closeError) {
+        cliLogger.error(`Error shutting down web UI server: ${closeError instanceof Error ? closeError.message : String(closeError)}`, LogCategory.SYSTEM);
+      }
+    }
+    
+    process.exit(1);
+  });
   
   // Create the model provider
   const modelProvider = createAnthropicProvider({
@@ -242,6 +315,9 @@ const startChat = async (options: { debug?: boolean, model?: string, e2bSandboxI
       cliLogger.info('  -q, --quiet       Minimal output, show only errors and results', LogCategory.USER_INTERACTION);
       cliLogger.info('  -m, --model       Specify the model to use', LogCategory.USER_INTERACTION);
       cliLogger.info('  -e, --e2bSandboxId       Specify the E2B sandbox ID to use. If not provided, the agent will run locally.', LogCategory.USER_INTERACTION);
+      cliLogger.info('  --web             Enable web UI (default: true)', LogCategory.USER_INTERACTION);
+      cliLogger.info('  --no-web          Disable web UI', LogCategory.USER_INTERACTION);
+      cliLogger.info('  --port <port>     Port for web UI (default: 3000)', LogCategory.USER_INTERACTION);
       cliLogger.info('\n', LogCategory.USER_INTERACTION);
       continue;
     }
@@ -332,8 +408,8 @@ const startChat = async (options: { debug?: boolean, model?: string, e2bSandboxI
     }
   }
   
-  // No need to close rl anymore
-  cliLogger.info('Goodbye!', LogCategory.SYSTEM);
+  // Gracefully shut down
+  await handleShutdown();
 };
 
 // Setup command line interface
@@ -350,6 +426,9 @@ program
   .option('-q, --quiet', 'Minimal output, show only errors and results')
   .option('-m, --model <model>', 'Model to use', 'claude-3-7-sonnet-20250219')
   .option('-e, --e2bSandboxId <e2bSandboxId>', 'E2B sandbox ID to use, if not provided, the agent will run locally')
+  .option('--web', 'Enable web UI (default: true)')
+  .option('--no-web', 'Disable web UI')
+  .option('--port <port>', 'Port for web UI', (value) => parseInt(value, 10))
   .action(startChat);
 
 // Default command (when no command is specified)
@@ -358,6 +437,9 @@ program
   .option('-q, --quiet', 'Minimal output, show only errors and results')
   .option('-m, --model <model>', 'Model to use', 'claude-3-7-sonnet-20250219')
   .option('-e, --e2bSandboxId <e2bSandboxId>', 'E2B sandbox ID to use, if not provided, the agent will run locally')
+  .option('--web', 'Enable web UI (default: true)')
+  .option('--no-web', 'Disable web UI')
+  .option('--port <port>', 'Port for web UI', (value) => parseInt(value, 10))
   .action(startChat);
 
 // Parse command line arguments

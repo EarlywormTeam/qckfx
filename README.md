@@ -48,6 +48,7 @@ ANTHROPIC_API_KEY=your_key_here npx qckfx
 3. **Bash Command Execution**: Run terminal commands with proper permission handling
 4. **Interactive Chat**: Have multi-turn conversations with context preservation
 5. **Claude Integration**: Powered by Anthropic's Claude models with tool calling
+6. **Web UI**: Browser-based interface for interacting with the agent
 
 ## Architecture
 
@@ -63,6 +64,10 @@ qckfx agent
 ├── Providers
 │   ├── AnthropicProvider (for Claude models)
 │   └── (other providers)
+├── Server
+│   ├── Express Server (for Web UI)
+│   ├── API Endpoints
+│   └── Static File Serving
 ├── Tools
 │   ├── BashTool
 │   ├── GlobTool
@@ -118,6 +123,9 @@ Options:
   -q, --quiet              Minimal output, show only errors and results
   -m, --model <model>      Specify the Claude model to use (default: claude-3-7-sonnet-20250219)
   -e, --e2bSandboxId <id>  Run agent tools in an E2B sandbox (requires sandbox ID)
+  --web                    Enable web UI (default: true)
+  --no-web                 Disable web UI
+  --port <port>            Port for web UI (default: 3000)
 ```
 
 ### E2B Integration
@@ -201,6 +209,27 @@ The agent excels at complex software development tasks:
 - **Refactoring**: "Help me convert this class component to a functional component"
 - **Exploration**: "Explain how the routing works in this codebase"
 - **Testing**: "Generate unit tests for this API endpoint"
+
+## Web UI
+
+The agent now includes a web UI that provides a browser-based interface for interacting with the agent. To use the web UI:
+
+1. Start the agent with the `--web` flag (enabled by default)
+2. Open your browser to the URL displayed in the console (usually http://localhost:3000)
+
+### Configuration
+
+The web UI can be configured using the following command-line options:
+
+- `--web` - Enable the web UI (default: true)
+- `--no-web` - Disable the web UI
+- `--port <port>` - Specify the port for the web UI (default: 3000)
+
+Alternatively, you can use environment variables:
+
+- `QCKFX_DISABLE_WEB=true` - Disable the web UI
+- `QCKFX_PORT=<port>` - Specify the port for the web UI
+- `QCKFX_HOST=<host>` - Specify the host to bind to (default: localhost)
 
 ## Hosted Solution
 
