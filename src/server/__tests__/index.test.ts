@@ -120,6 +120,7 @@ describe('Server', () => {
         enabled: false,
         port: 3000,
         host: 'localhost',
+        development: false,
       };
       
       const result = await startServer(config);
@@ -137,6 +138,7 @@ describe('Server', () => {
         enabled: true,
         port: 3000,
         host: 'localhost',
+        development: false,
       };
       
       // Set a longer timeout for this test
@@ -174,6 +176,7 @@ describe('Server', () => {
         enabled: true,
         port: 3000,
         host: 'localhost',
+        development: false,
       };
       
       // Set a longer timeout for this test
@@ -204,6 +207,7 @@ describe('Server', () => {
         enabled: true,
         port: 3000,
         host: 'localhost',
+        development: false,
       };
       
       // Now when we call startServer, it should catch the error and throw a ServerError
@@ -222,6 +226,7 @@ describe('Server', () => {
         enabled: true,
         port: 3000,
         host: 'localhost',
+        development: false,
       };
       
       const result = await startServer(config);

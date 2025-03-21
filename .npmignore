@@ -1,0 +1,9 @@
+# Source files not needed in the published npm package
+src/ui
+vite.config.ts
+tsconfig.ui.json
+tailwind.config.js
+postcss.config.js
+.env.development
+.env.production
+components.json
