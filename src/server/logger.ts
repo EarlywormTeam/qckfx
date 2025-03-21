@@ -2,7 +2,7 @@
  * Server logger
  */
 
-import { createLogger, LogCategory, LogLevel } from '../utils/logger';
+import { createLogger, LogLevel } from '../utils/logger';
 
 /**
  * Create a logger for the server

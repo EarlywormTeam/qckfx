@@ -11,6 +11,13 @@ import fs from 'fs';
 import { ServerConfig, getServerUrl } from './config';
 import { findAvailablePort } from './utils';
 import { serverLogger } from './logger';
+import apiRoutes from './routes/api';
+import { errorHandler, notFoundHandler } from './middleware/errorHandler';
+import { sessionManager } from './services/SessionManager';
+import { WebSocketService } from './services/WebSocketService';
+import { createServer } from 'http';
+import swaggerUi from 'swagger-ui-express';
+import { apiDocumentation } from './docs/api';
 
 /**
  * Error class for server-related errors
@@ -24,10 +31,14 @@ export class ServerError extends Error {
 
 /**
  * Check if we're running in development mode
+ * Used in error handler to decide how much information to show
  */
 function isDevelopmentMode(): boolean {
   return process.env.NODE_ENV === 'development';
 }
+
+// Export for use in other modules
+export { isDevelopmentMode };
 
 /**
  * Start the server
@@ -63,6 +74,9 @@ export async function startServer(config: ServerConfig): Promise<{
     app.get('/health', (req, res) => {
       res.status(200).json({ status: 'ok' });
     });
+    
+    // Set up Swagger documentation UI
+    app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(apiDocumentation));
     
     // Use the build directory for static files
     const staticFilesPath = path.resolve(__dirname, '../../dist/ui');
@@ -102,11 +116,11 @@ export async function startServer(config: ServerConfig): Promise<{
       });
     }
     
-    // Add API routes prefix
-    app.use('/api', (req, res, next) => {
-      // This will be populated in a future PR
-      next();
-    });
+    // Add API routes
+    app.use('/api', apiRoutes);
+    
+    // Add route not found handler for API routes
+    app.use('/api/*', notFoundHandler);
     
     // Add a catch-all route for SPA (only needed if UI build exists)
     if (uiBuildExists) {
@@ -115,30 +129,23 @@ export async function startServer(config: ServerConfig): Promise<{
       });
     }
     
-    // Error handling middleware
-    app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
-      serverLogger.error('Server error:', err);
-      
-      // In development mode, include the error details
-      const errorResponse = {
-        error: {
-          message: 'Internal server error',
-          ...(isDevelopmentMode() ? { 
-            details: err.message,
-            stack: err.stack 
-          } : {})
-        }
-      };
-      
-      res.status(500).json(errorResponse);
-    });
+    // Use our custom error handling middleware
+    app.use(errorHandler);
+    
+    // Create HTTP server first to attach both Express and Socket.IO
+    const httpServer = createServer(app);
     
     // Start the server with proper error handling
-    const serverPromise = new Promise<{ server: ReturnType<typeof app.listen>; url: string }>((resolve, reject) => {
+    const serverPromise = new Promise<{ server: ReturnType<typeof httpServer.listen>; url: string }>((resolve, reject) => {
       try {
-        const server = app.listen(config.port, config.host, () => {
+        const server = httpServer.listen(config.port, config.host, () => {
           const url = getServerUrl(config);
           serverLogger.info(`Server started at ${url}`);
+          
+          // Initialize WebSocketService after server is listening
+          WebSocketService.getInstance(httpServer);
+          serverLogger.info('WebSocket service initialized');
+          
           resolve({ server, url });
         });
         
@@ -154,8 +161,20 @@ export async function startServer(config: ServerConfig): Promise<{
     
     return {
       close: async () => {
+        serverLogger.info('Shutting down server...');
+        
+        // Stop the session manager
+        sessionManager.stop();
+        
+        // Close WebSocket connections
+        try {
+          const webSocketService = WebSocketService.getInstance();
+          await webSocketService.close();
+        } catch (error) {
+          serverLogger.warn('Error closing WebSocket service:', error);
+        }
+        
         return new Promise<void>((resolve, reject) => {
-          serverLogger.info('Shutting down server...');
           server.close((err) => {
             if (err) {
               serverLogger.error('Error closing server:', err);
