@@ -2,6 +2,22 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Import terminal styles */
+@import './terminal.css';
+@import './themes/dark.css';
+@import './themes/light.css';
+
+/* App theme utilities */
+[data-theme="light"] body {
+  background-color: hsl(0, 0%, 100%);
+  color: hsl(240, 10%, 3.9%);
+}
+
+[data-theme="dark"] body {
+  background-color: hsl(240, 10%, 3.9%);
+  color: hsl(0, 0%, 98%);
+}
+
 @layer base {
   :root {
     --background: 0 0% 100%;
@@ -57,4 +73,13 @@
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
   }
+}
+
+/* Additional dark mode helper for Tailwind */
+.dark {
+  color-scheme: dark;
+}
+
+.light {
+  color-scheme: light;
 }

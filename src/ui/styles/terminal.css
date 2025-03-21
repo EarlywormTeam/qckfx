@@ -1,0 +1,139 @@
+/* src/ui/styles/terminal.css */
+.terminal {
+  --terminal-background: var(--terminal-background-color);
+  --terminal-text: var(--terminal-text-color);
+  --terminal-border: var(--terminal-border-color);
+  --terminal-header: var(--terminal-header-color);
+  --terminal-input-bg: var(--terminal-input-bg-color);
+  --terminal-prompt: var(--terminal-prompt-color);
+  --terminal-user-msg-bg: var(--terminal-user-msg-bg-color);
+  --terminal-user-msg-text: var(--terminal-user-msg-text-color);
+  --terminal-assistant-msg-bg: var(--terminal-assistant-msg-bg-color);
+  --terminal-assistant-msg-text: var(--terminal-assistant-msg-text-color);
+  --terminal-system-msg-bg: var(--terminal-system-msg-bg-color);
+  --terminal-system-msg-text: var(--terminal-system-msg-text-color);
+  --terminal-error-msg-bg: var(--terminal-error-msg-bg-color);
+  --terminal-error-msg-text: var(--terminal-error-msg-text-color);
+  --terminal-tool-msg-bg: var(--terminal-tool-msg-bg-color);
+  --terminal-tool-msg-text: var(--terminal-tool-msg-text-color);
+
+  /* Apply the terminal font family from context */
+  font-family: var(--terminal-font-family, "Menlo", "Monaco", "Courier New", monospace);
+}
+
+
+/* Font size utility classes */
+.terminal-text-xs {
+  font-size: 0.75rem;
+}
+
+.terminal-text-sm {
+  font-size: 0.875rem;
+}
+
+.terminal-text-md {
+  font-size: 1rem;
+}
+
+.terminal-text-lg {
+  font-size: 1.125rem;
+}
+
+.terminal-text-xl {
+  font-size: 1.25rem;
+}
+
+/* Terminal animation classes */
+@keyframes terminal-cursor-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.terminal-cursor {
+  display: inline-block;
+  width: 0.6em;
+  height: 1em;
+  background-color: var(--terminal-prompt);
+  animation: terminal-cursor-blink 1s infinite;
+  vertical-align: middle;
+  margin-left: 0.2em;
+}
+
+@keyframes terminal-fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.terminal-message-animation {
+  animation: terminal-fade-in 0.2s ease-out forwards;
+}
+
+/* Terminal scrollbar styling */
+.terminal-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.terminal-scrollbar::-webkit-scrollbar-track {
+  background: var(--terminal-background);
+}
+
+.terminal-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--terminal-border);
+  border-radius: 4px;
+}
+
+.terminal-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--terminal-user-msg-bg);
+}
+
+/* Add responsive design styles */
+@media (max-width: 640px) {
+  .terminal-mobile-full {
+    height: 100vh !important;
+    width: 100vw !important;
+    border-radius: 0 !important;
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 50;
+  }
+
+  .terminal-text-xs,
+  .terminal-text-sm {
+    font-size: 0.75rem !important;
+  }
+
+  .terminal-text-md {
+    font-size: 0.875rem !important;
+  }
+
+  .terminal-text-lg,
+  .terminal-text-xl {
+    font-size: 1rem !important;
+  }
+}
+
+/* Add reduced motion styles */
+@media (prefers-reduced-motion: reduce) {
+  .terminal-message-animation {
+    animation: none !important;
+  }
+
+  .terminal-cursor {
+    animation: none !important;
+    opacity: 1;
+  }
+}
+
+/* Screen reader only class */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}

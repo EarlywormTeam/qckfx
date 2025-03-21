@@ -234,6 +234,16 @@ Alternatively, you can use environment variables:
 - `QCKFX_PORT=<port>` - Specify the port for the web UI
 - `QCKFX_HOST=<host>` - Specify the host to bind to (default: localhost)
 
+### Terminal UI Documentation
+
+The terminal UI provides a rich, interactive experience with various features:
+
+- [Terminal UI Overview](docs/ui/terminal-ui.md)
+- [Keyboard Shortcuts](docs/ui/keyboard-shortcuts.md)
+- [Message Types](docs/ui/message-types.md)
+- [Theme Customization](docs/ui/theme-customization.md)
+- [Accessibility Features](docs/ui/accessibility.md)
+
 ### Development
 
 For frontend development, you can run the Vite dev server:

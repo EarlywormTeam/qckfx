@@ -9,6 +9,10 @@ export default defineConfig(({ command, mode }) => {
   const isProduction = mode === 'production';
   
   return {
+    // Explicitly set the root directory and entry point
+    root: './',
+    // Disable the public directory to prevent it from overriding the root index.html
+    publicDir: false,
     plugins: [
       react(),
       splitVendorChunkPlugin(),
@@ -19,6 +23,7 @@ export default defineConfig(({ command, mode }) => {
             title: 'QCKFX Agent',
           },
         },
+        template: 'index.html',
       }),
     ],
     build: {

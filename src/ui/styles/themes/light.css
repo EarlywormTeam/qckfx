@@ -1,0 +1,20 @@
+/* src/ui/styles/themes/light.css */
+.theme-light {
+  --terminal-background-color: #f8f9fa;
+  --terminal-text-color: #1a1a1a;
+  --terminal-border-color: #94a3b8;
+  --terminal-header-color: #e9ecef;
+  --terminal-input-bg-color: #f1f3f5;
+  --terminal-prompt-color: #0284c7;
+
+  --terminal-user-msg-bg-color: #dbeafe;
+  --terminal-user-msg-text-color: #1e3a8a;
+  --terminal-assistant-msg-bg-color: #f3f4f6;
+  --terminal-assistant-msg-text-color: #111827;
+  --terminal-system-msg-bg-color: #e5e7eb;
+  --terminal-system-msg-text-color: #374151;
+  --terminal-error-msg-bg-color: #fee2e2;
+  --terminal-error-msg-text-color: #7f1d1d;
+  --terminal-tool-msg-bg-color: #f1f5f9;
+  --terminal-tool-msg-text-color: #0f172a;
+}
