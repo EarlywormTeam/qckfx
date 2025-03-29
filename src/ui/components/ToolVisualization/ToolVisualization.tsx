@@ -1,6 +1,7 @@
 import React from 'react';
 import { cn } from '../../lib/utils';
 import { ToolExecution } from '../../hooks/useToolStream';
+import { ToolState } from '../../types/terminal';
 
 // Helper function to truncate strings
 const truncateString = (str: string, maxLength: number): string => {
@@ -115,6 +116,8 @@ export interface ToolVisualizationProps {
   showExecutionTime?: boolean;
   showExpandedParams?: boolean;
   onToggleExpand?: () => void;
+  sessionId?: string;
+  isDarkTheme?: boolean; // Add property to receive theme from parent
 }
 
 export function ToolVisualization({
@@ -124,22 +127,44 @@ export function ToolVisualization({
   showExecutionTime = true,
   showExpandedParams = false,
   onToggleExpand,
+  sessionId,
+  isDarkTheme = false, // Default to light theme
 }: ToolVisualizationProps) {
-  // Use the status to determine styling - subtle background colors with clear status indication
-  const statusStyles = {
-    running: 'border-blue-500 bg-blue-50 dark:bg-blue-900/30 shadow-sm',
-    completed: 'border-green-500 bg-green-50 dark:bg-green-900/30 shadow-sm',
-    error: 'border-red-500 bg-red-50 dark:bg-red-900/30 shadow-sm',
-    'awaiting-permission': 'border-amber-500 bg-amber-50 dark:bg-amber-900/30 shadow-sm',
-  }[tool.status];
+  // Directly convert tool status to ToolState without using internal state
+  const toolState = 
+    tool.status === 'running' ? ToolState.RUNNING :
+    tool.status === 'completed' ? ToolState.COMPLETED :
+    tool.status === 'error' ? ToolState.ERROR :
+    tool.status === 'aborted' ? ToolState.ABORTED :
+    tool.status === 'awaiting-permission' ? 'awaiting-permission' as any :
+    ToolState.PENDING;
+  // Use the toolState and isDarkTheme to determine styling
+  const getStatusStyles = () => {
+    const baseStyle = {
+      [ToolState.RUNNING]: `border-blue-500 ${isDarkTheme ? 'bg-blue-900/30' : 'bg-blue-50'} shadow-sm`,
+      [ToolState.COMPLETED]: `border-green-500 ${isDarkTheme ? 'bg-green-900/30' : 'bg-green-50'} shadow-sm`,
+      [ToolState.ERROR]: `border-red-500 ${isDarkTheme ? 'bg-red-900/30' : 'bg-red-50'} shadow-sm`,
+      [ToolState.ABORTED]: `border-gray-500 ${isDarkTheme ? 'bg-gray-800/20' : 'bg-gray-50'} opacity-75 tool-aborted`,
+      'awaiting-permission': `border-amber-500 ${isDarkTheme ? 'bg-amber-900/30' : 'bg-amber-50'} shadow-sm`,
+    };
+    
+    const currentState = toolState === ToolState.PENDING 
+      ? (tool.status === 'awaiting-permission' ? 'awaiting-permission' : ToolState.RUNNING) 
+      : toolState;
+      
+    return baseStyle[currentState];
+  };
+  
+  const statusStyles = getStatusStyles();
   
   // Determine the status indicator text and style
   const statusIndicator = {
-    running: { icon: '●', ariaLabel: 'Running', className: 'text-blue-500 animate-pulse' },
-    completed: { icon: '✓', ariaLabel: 'Completed', className: 'text-green-500' },
-    error: { icon: '✗', ariaLabel: 'Error', className: 'text-red-500' },
+    [ToolState.RUNNING]: { icon: '●', ariaLabel: 'Running', className: 'text-blue-500 animate-pulse' },
+    [ToolState.COMPLETED]: { icon: '✓', ariaLabel: 'Completed', className: 'text-green-500' },
+    [ToolState.ERROR]: { icon: '✗', ariaLabel: 'Error', className: 'text-red-500' },
+    [ToolState.ABORTED]: { icon: '■', ariaLabel: 'Aborted', className: 'text-gray-500' },
     'awaiting-permission': { icon: '?', ariaLabel: 'Waiting for permission', className: 'text-amber-500 animate-pulse' },
-  }[tool.status];
+  }[toolState === ToolState.PENDING ? (tool.status === 'awaiting-permission' ? 'awaiting-permission' : ToolState.RUNNING) : toolState];
   
   // Format execution time if available
   const formattedTime = tool.executionTime 
@@ -152,85 +177,87 @@ export function ToolVisualization({
   return (
     <div 
       className={cn(
-        'tool-visualization border-l-4 px-2 py-1 my-1 rounded',
-        'transition-colors duration-300',
+        'tool-visualization border-l-4 px-1 py-0.5 my-0.5 rounded',
+        'transition-colors duration-300 inline-block',
         statusStyles,
-        compact ? 'text-sm' : '', // Smaller text for compact view
+        // Use terminal's font size classes for relative sizing instead of fixed size
+        'text-[0.8em]', // Make text slightly smaller than terminal text but scale with it
         className
       )}
+      style={{ maxWidth: '30%', width: '300px' }} // Direct width constraint
       data-testid="tool-visualization"
       data-tool-id={tool.tool}
-      data-tool-status={tool.status}
+      data-tool-status={toolState}
       role="status"
-      aria-live={tool.status === 'running' ? 'polite' : 'off'}
-      aria-label={`Tool ${tool.toolName} ${tool.status}: ${getToolDescription(tool)}`}
+      aria-live={toolState === ToolState.RUNNING ? 'polite' : 'off'}
+      aria-label={`Tool ${tool.toolName} ${toolState}: ${getToolDescription(tool)}`}
     >
-      {/* Header with tool name - simpler display */}
+      {/* Simplified layout with tool name, description and status in a more compact form */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center">
-          <span className="font-semibold text-xs">{tool.toolName}</span>
+        <div className="flex items-center gap-1">
+          {/* Status indicator inline with name */}
+          <span 
+            className={statusIndicator.className}
+            aria-label={statusIndicator.ariaLabel}
+            role="status"
+          >
+            {statusIndicator.icon}
+          </span>
+          
+          <span className="font-semibold">{tool.toolName}</span>
+          
+          {/* Execution time inline if available and enabled */}
+          {showExecutionTime && tool.executionTime && (
+            <span className={`${isDarkTheme ? 'text-gray-400' : 'text-gray-500'} ml-1`}>
+              ({formattedTime})
+            </span>
+          )}
         </div>
-        
-        {showExecutionTime && tool.executionTime && (
-          <div className="text-xs text-gray-500 dark:text-gray-400">
-            {formattedTime}
-          </div>
-        )}
       </div>
       
-      {/* Parameters - simplified display that always shows what the tool is doing */}
+      {/* Parameters on same line when possible, with clear description */}
       <div 
         className={cn(
-          'mt-1',
-          'text-xs',
+          'truncate',
           showExpandedParams ? 'whitespace-pre-wrap' : 'truncate'
         )}
         onClick={onToggleExpand}
         style={{ cursor: onToggleExpand ? 'pointer' : 'default' }}
       >
-        {/* Always show a meaningful description of what the tool is doing */}
         {getToolDescription(tool)}
       </div>
       
-      {/* Error message if status is error */}
-      {tool.status === 'error' && tool.error && (
-        <div className="mt-1 text-sm text-red-600 dark:text-red-400">
+      {/* Error message if status is error - keep this visible */}
+      {toolState === ToolState.ERROR && tool.error && (
+        <div className={isDarkTheme ? 'text-red-400' : 'text-red-600'}>
           {tool.error.message}
         </div>
       )}
       
-      {/* Footer with timestamp */}
-      {!compact && (
-        <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-          {timestamp}
+      {/* Aborted message if status is aborted - keep this visible too */}
+      {toolState === ToolState.ABORTED && (
+        <div className={isDarkTheme ? 'text-gray-400' : 'text-gray-600'}>
+          Operation aborted
         </div>
       )}
       
-      {/* Unified status indicator display */}
-      <div className="flex justify-end mt-1">
-        <span 
-          className={`text-base ${statusIndicator.className}`}
-          aria-label={statusIndicator.ariaLabel}
-          role="status"
-        >
-          {statusIndicator.icon}
-        </span>
-      </div>
-      
-      {/* Permission request banner - added for permission-required tools */}
-      {tool.status === 'awaiting-permission' && tool.requiresPermission && (
+      {/* Permission request banner - more compact version */}
+      {tool.status === 'awaiting-permission' && tool.requiresPermission && toolState !== ToolState.ABORTED && (
         <div 
-          className="mt-2 bg-amber-100 dark:bg-amber-900 text-amber-800 dark:text-amber-100 px-3 py-2 rounded-md text-sm border border-amber-300 dark:border-amber-700"
+          className={`mt-1 ${isDarkTheme ? 'bg-amber-900 text-amber-100 border-amber-700' : 'bg-amber-100 text-amber-800 border-amber-300'} px-2 py-1 rounded-md text-xs border`}
           data-testid="permission-banner"
         >
-          <div className="font-semibold">Permission Required</div>
-          <div className="text-xs mt-1">Type 'y' to allow, anything else to deny</div>
+          <div className="font-semibold">Permission Required - Type 'y' to allow</div>
         </div>
       )}
       
       {/* Debug output - only visible in development */}
       {process.env.NODE_ENV === 'development' && (
-        <div className="mt-2 bg-gray-100 dark:bg-gray-800 p-2 text-xs border border-gray-300 dark:border-gray-600 rounded font-mono">
+        <div className={`mt-2 p-2 text-xs border rounded font-mono ${
+          isDarkTheme 
+            ? 'bg-gray-800 border-gray-600' 
+            : 'bg-gray-100 border-gray-300'
+        }`}>
           <div>status: {tool.status}</div>
           <div>requiresPermission: {tool.requiresPermission ? 'true' : 'false'}</div>
           <div>permissionId: {tool.permissionId || 'none'}</div>

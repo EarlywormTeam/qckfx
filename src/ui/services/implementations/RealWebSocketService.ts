@@ -32,6 +32,11 @@ export class RealWebSocketService extends EventEmitter implements IWebSocketServ
   private readonly flushIntervalMs = 500;
   // Throttle event emission for frequently updated tools
   private readonly throttleInterval = 100;
+  
+  // Abort handling
+  private abortTimestamps: Map<string, number> = new Map();
+  private activeToolsMap: Map<string, Array<{ id: string; name: string; state: string }>> = new Map();
+  private isProcessingMap: Map<string, boolean> = new Map();
 
   // Throttled event emitter for high-frequency events
   private throttledEmit = throttle<(event: string, data: unknown) => void>(
@@ -226,8 +231,65 @@ export class RealWebSocketService extends EventEmitter implements IWebSocketServ
     });
 
     this.socket.on(WebSocketEvent.PROCESSING_ABORTED, (data: WebSocketEventMap[WebSocketEvent.PROCESSING_ABORTED]) => {
-      this.bufferEvent(WebSocketEvent.PROCESSING_ABORTED, data);
-      this.emit(WebSocketEvent.PROCESSING_ABORTED, data);
+      // Store the abort timestamp for this session
+      const abortTimestamp = Date.now();
+      this.abortTimestamps.set(data.sessionId, abortTimestamp);
+      
+      // Mark the session as not processing
+      this.isProcessingMap?.set(data.sessionId, false);
+      
+      // Track aborted tools - find all active tools for this session
+      const abortedTools = new Set<string>();
+      
+      // If we have active tools tracking, check for tools to abort
+      if (this.activeToolsMap.has(data.sessionId)) {
+        const activeTools = this.activeToolsMap.get(data.sessionId) || [];
+        
+        // For each active tool, emit a completion event with aborted state
+        activeTools.forEach(tool => {
+          // Add to aborted tools set
+          abortedTools.add(tool.id);
+          
+          // Change the state to aborted
+          tool.state = 'aborted';
+          
+          // Create an abort result
+          const abortResult = {
+            aborted: true,
+            abortTimestamp
+          };
+          
+          // Emit an aborted event instead of a completion event
+          this.emit(WebSocketEvent.TOOL_EXECUTION_ABORTED, {
+            sessionId: data.sessionId,
+            tool: {
+              id: tool.id,
+              name: tool.name || 'Tool',
+            },
+            timestamp: new Date().toISOString(),
+            abortTimestamp,
+            isActive: false,
+            startTime: new Date(abortTimestamp - 1000).toISOString(), // Approximate
+          });
+        });
+        
+        // Clear active tools for this session
+        this.activeToolsMap.set(data.sessionId, []);
+      }
+      
+      // No need to store aborted tools in session storage anymore
+      // Each tool will have its own status
+      
+      // Add abort data to the event
+      const enrichedData = {
+        ...data,
+        abortTimestamp,
+        abortedTools: [...abortedTools]
+      };
+      
+      // Buffer and emit the event
+      this.bufferEvent(WebSocketEvent.PROCESSING_ABORTED, enrichedData);
+      this.emit(WebSocketEvent.PROCESSING_ABORTED, enrichedData);
     });
 
     this.socket.on(WebSocketEvent.TOOL_EXECUTION, (data: WebSocketEventMap[WebSocketEvent.TOOL_EXECUTION]) => {
@@ -248,6 +310,75 @@ export class RealWebSocketService extends EventEmitter implements IWebSocketServ
     this.socket.on(WebSocketEvent.SESSION_UPDATED, (data: WebSocketEventMap[WebSocketEvent.SESSION_UPDATED]) => {
       this.bufferEvent(WebSocketEvent.SESSION_UPDATED, data);
       this.emit(WebSocketEvent.SESSION_UPDATED, data);
+    });
+    
+    // Handle tool execution started to track active tools
+    this.socket.on(WebSocketEvent.TOOL_EXECUTION_STARTED, (data: WebSocketEventMap[WebSocketEvent.TOOL_EXECUTION_STARTED]) => {
+      // Track this tool as active for the session
+      if (!this.activeToolsMap.has(data.sessionId)) {
+        this.activeToolsMap.set(data.sessionId, []);
+      }
+      
+      const activeTools = this.activeToolsMap.get(data.sessionId) || [];
+      activeTools.push({
+        id: data.tool.id,
+        name: data.tool.name,
+        state: 'running'
+      });
+      
+      this.activeToolsMap.set(data.sessionId, activeTools);
+      
+      // Buffer and emit the event
+      this.bufferEvent(WebSocketEvent.TOOL_EXECUTION_STARTED, data);
+      this.emit(WebSocketEvent.TOOL_EXECUTION_STARTED, data);
+    });
+    
+    // Handle tool execution completed to remove from active tools
+    this.socket.on(WebSocketEvent.TOOL_EXECUTION_COMPLETED, (data: WebSocketEventMap[WebSocketEvent.TOOL_EXECUTION_COMPLETED]) => {
+      // Check if the session was aborted
+      const abortTimestamp = this.abortTimestamps.get(data.sessionId);
+      const eventTimestamp = data.timestamp ? new Date(data.timestamp).getTime() : Date.now();
+      
+      // If this event happened after abort, ignore it
+      if (abortTimestamp && eventTimestamp > abortTimestamp) {
+        console.log('Ignoring tool completion event after abort:', data.tool.id);
+        return;
+      }
+      
+      // Remove from active tools
+      if (this.activeToolsMap.has(data.sessionId)) {
+        const activeTools = this.activeToolsMap.get(data.sessionId) || [];
+        const updatedTools = activeTools.filter(tool => tool.id !== data.tool.id);
+        this.activeToolsMap.set(data.sessionId, updatedTools);
+      }
+      
+      // Buffer and emit the event
+      this.bufferEvent(WebSocketEvent.TOOL_EXECUTION_COMPLETED, data);
+      this.emit(WebSocketEvent.TOOL_EXECUTION_COMPLETED, data);
+    });
+    
+    // Handle tool execution error to remove from active tools
+    this.socket.on(WebSocketEvent.TOOL_EXECUTION_ERROR, (data: WebSocketEventMap[WebSocketEvent.TOOL_EXECUTION_ERROR]) => {
+      // Check if the session was aborted
+      const abortTimestamp = this.abortTimestamps.get(data.sessionId);
+      const eventTimestamp = data.timestamp ? new Date(data.timestamp).getTime() : Date.now();
+      
+      // If this event happened after abort, ignore it
+      if (abortTimestamp && eventTimestamp > abortTimestamp) {
+        console.log('Ignoring tool error event after abort:', data.tool.id);
+        return;
+      }
+      
+      // Remove from active tools
+      if (this.activeToolsMap.has(data.sessionId)) {
+        const activeTools = this.activeToolsMap.get(data.sessionId) || [];
+        const updatedTools = activeTools.filter(tool => tool.id !== data.tool.id);
+        this.activeToolsMap.set(data.sessionId, updatedTools);
+      }
+      
+      // Buffer and emit the event
+      this.bufferEvent(WebSocketEvent.TOOL_EXECUTION_ERROR, data);
+      this.emit(WebSocketEvent.TOOL_EXECUTION_ERROR, data);
     });
   }
 
@@ -466,6 +597,24 @@ export class RealWebSocketService extends EventEmitter implements IWebSocketServ
   }
   
   /**
+   * Check if a session has been aborted
+   * @param sessionId The session ID to check
+   * @returns Whether the session has been aborted
+   */
+  public isSessionAborted(sessionId: string): boolean {
+    return this.abortTimestamps.has(sessionId);
+  }
+
+  /**
+   * Get the abort timestamp for a session
+   * @param sessionId The session ID
+   * @returns The timestamp or undefined if not aborted
+   */
+  public getAbortTimestamp(sessionId: string): number | undefined {
+    return this.abortTimestamps.get(sessionId);
+  }
+
+  /**
    * Reset the service - completely clean up all resources
    * Used primarily for testing and cleanup
    */
@@ -485,6 +634,9 @@ export class RealWebSocketService extends EventEmitter implements IWebSocketServ
           WebSocketEvent.PROCESSING_ERROR,
           WebSocketEvent.PROCESSING_ABORTED,
           WebSocketEvent.TOOL_EXECUTION,
+          WebSocketEvent.TOOL_EXECUTION_STARTED,
+          WebSocketEvent.TOOL_EXECUTION_COMPLETED,
+          WebSocketEvent.TOOL_EXECUTION_ERROR,
           WebSocketEvent.PERMISSION_REQUESTED,
           WebSocketEvent.PERMISSION_RESOLVED,
           WebSocketEvent.SESSION_UPDATED
@@ -539,7 +691,10 @@ export class RealWebSocketService extends EventEmitter implements IWebSocketServ
     this.messageBuffer.clear();
     this.toolResultBuffer = {};
     this.lastToolFlush = {};
-    console.log('RealWebSocketService: Cleared message buffers');
+    this.abortTimestamps.clear();
+    this.activeToolsMap.clear();
+    this.isProcessingMap.clear();
+    console.log('RealWebSocketService: Cleared message buffers and abort tracking');
     
     // 4. Reset all state variables
     this.currentSessionId = null;

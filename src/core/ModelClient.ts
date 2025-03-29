@@ -11,6 +11,7 @@ import {
   SessionState, 
   ToolCallResponse 
 } from '../types/model';
+import { isSessionAborted } from '../utils/sessionUtils';
 import { ToolDescription } from '../types/registry';
 import { trackTokenUsage } from '../utils/TokenManager';
 import { createDefaultPromptManager, PromptManager } from './PromptManager';
@@ -77,49 +78,55 @@ export const createModelClient = (config: ModelClientConfig): ModelClient => {
         sessionState
       };
       
-      // Call the model provider
-      const response = await modelProvider(request);
-      
-      // Track token usage from response
-      if (response.usage) {
-        trackTokenUsage(response, sessionState);
-      }
-      
-      // Check if Claude wants to use a tool - look for tool_use in the content
-      const hasTool = response.content && response.content.some(c => c.type === "tool_use");
-      
-      if (hasTool) {
-        // Extract the tool use from the response
-        const toolUse = response.content && response.content.find(c => c.type === "tool_use");
+      try {
+        // Call the model provider
+        const response = await modelProvider(request);
         
-        // Add the assistant's tool use response to the conversation history
-        if (sessionState.conversationHistory && toolUse) {
-          sessionState.conversationHistory.push({
-            role: "assistant",
-            content: [
-              {
-                type: "tool_use",
-                id: toolUse.id,
-                name: toolUse.name,
-                input: toolUse.input || {}
-              }
-            ]
-          });
+        // Track token usage from response
+        if (response.usage) {
+          trackTokenUsage(response, sessionState);
         }
         
-        if (toolUse) {
-          return {
-            toolCall: {
-              toolId: toolUse.name || "",
-              args: toolUse.input || {},
-              toolUseId: toolUse.id || "", // Save this for returning results
-            },
-            toolChosen: true
-          };
+        // Check if Claude wants to use a tool - look for tool_use in the content
+        const hasTool = response.content && response.content.some(c => c.type === "tool_use");
+        
+        if (hasTool) {
+          // Extract the tool use from the response
+          const toolUse = response.content && response.content.find(c => c.type === "tool_use");
+          
+          // Add the assistant's tool use response to the conversation history
+          if (sessionState.conversationHistory && toolUse) {
+            sessionState.conversationHistory.push({
+              role: "assistant",
+              content: [
+                {
+                  type: "tool_use",
+                  id: toolUse.id,
+                  name: toolUse.name,
+                  input: toolUse.input || {}
+                }
+              ]
+            });
+          }
+          
+          if (toolUse) {
+            return {
+              toolCall: {
+                toolId: toolUse.name || "",
+                args: toolUse.input || {},
+                toolUseId: toolUse.id || "", // Save this for returning results
+              },
+              toolChosen: true,
+              aborted: false // Explicitly set aborted flag to false
+            };
+          }
         }
+        
+        return {response: response, toolChosen: false};
+      } catch (error) {
+        // Just re-throw the error - AgentRunner will handle aborted sessions
+        throw error;
       }
-      
-      return {response: response, toolChosen: false};
     },
     
     /**
@@ -148,14 +155,19 @@ export const createModelClient = (config: ModelClientConfig): ModelClient => {
         temperature
       };
       
-      const response = await modelProvider(prompt);
-      
-      // Track token usage from response
-      if (response.usage) {
-        trackTokenUsage(response, sessionState);
+      try {
+        const response = await modelProvider(prompt);
+        
+        // Track token usage from response
+        if (response.usage) {
+          trackTokenUsage(response, sessionState);
+        }
+        
+        return response;
+      } catch (error) {
+        // Just re-throw the error - AgentRunner will handle aborted sessions
+        throw error;
       }
-      
-      return response;
     }
   };
 };

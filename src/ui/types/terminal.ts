@@ -23,6 +23,14 @@ export interface TerminalState {
   streamBuffer: string[];
 }
 
+export enum ToolState {
+  PENDING = 'pending',
+  RUNNING = 'running',
+  COMPLETED = 'completed',
+  ERROR = 'error',
+  ABORTED = 'aborted'
+}
+
 export type TerminalAction =
   | { type: 'ADD_MESSAGE'; payload: TerminalMessage }
   | { type: 'ADD_MESSAGES'; payload: TerminalMessage[] }

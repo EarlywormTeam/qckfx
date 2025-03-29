@@ -12,6 +12,7 @@ export class MockWebSocketService extends EventEmitter implements IWebSocketServ
   private connectionStatus: ConnectionStatus = ConnectionStatus.DISCONNECTED;
   private currentSessionId: string | null = null;
   private timers: NodeJS.Timeout[] = [];
+  private abortTimestamps: Map<string, number> = new Map();
 
   constructor() {
     super();
@@ -93,6 +94,24 @@ export class MockWebSocketService extends EventEmitter implements IWebSocketServ
   }
   
   /**
+   * Check if a session has been aborted
+   * @param sessionId The session ID to check
+   * @returns Whether the session has been aborted
+   */
+  public isSessionAborted(sessionId: string): boolean {
+    return this.abortTimestamps.has(sessionId);
+  }
+
+  /**
+   * Get the abort timestamp for a session
+   * @param sessionId The session ID
+   * @returns The timestamp or undefined if not aborted
+   */
+  public getAbortTimestamp(sessionId: string): number | undefined {
+    return this.abortTimestamps.get(sessionId);
+  }
+  
+  /**
    * Reset the service state
    * This provides a complete cleanup to match the behavior of RealWebSocketService
    */
@@ -112,6 +131,7 @@ export class MockWebSocketService extends EventEmitter implements IWebSocketServ
     // 3. Reset state variables
     this.connectionStatus = ConnectionStatus.DISCONNECTED;
     this.currentSessionId = null;
+    this.abortTimestamps.clear();
     
     // 4. Start connected by default (after a brief delay)
     setTimeout(() => {
@@ -153,6 +173,17 @@ export class MockWebSocketService extends EventEmitter implements IWebSocketServ
     this.emit(WebSocketEvent.PROCESSING_COMPLETED, { 
       sessionId, 
       result: { response } 
+    });
+  }
+  
+  public simulateProcessingAborted(sessionId: string): void {
+    const abortTimestamp = Date.now();
+    this.abortTimestamps.set(sessionId, abortTimestamp);
+    
+    this.emit(WebSocketEvent.PROCESSING_ABORTED, { 
+      sessionId, 
+      abortTimestamp,
+      abortedTools: []
     });
   }
   

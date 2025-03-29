@@ -7,6 +7,7 @@ import ShortcutsPanel from '@/components/ShortcutsPanel';
 import TerminalSettings from '@/components/TerminalSettings';
 import useKeyboardShortcuts, { KeyboardShortcut } from '@/hooks/useKeyboardShortcuts';
 import { useTerminal } from '@/context/TerminalContext';
+import { useWebSocketTerminal } from '@/context/WebSocketTerminalContext';
 import { useTheme } from '@/components/ThemeProvider';
 import Announcer from '@/components/Announcer';
 import { generateAriaId, prefersReducedMotion } from '@/utils/accessibility';
@@ -79,6 +80,7 @@ export function Terminal({
   
   // Use provided theme or get from context
   const terminalContext = useTerminal();
+  const wsTerminalContext = useWebSocketTerminal();
   const { theme: appTheme } = useTheme();
   const themeToUse = theme || terminalContext.state.theme;
   
@@ -125,8 +127,8 @@ export function Terminal({
     '--terminal-user-msg-text': '#e2e8f0',
     '--terminal-assistant-msg-bg': '#1f2937',
     '--terminal-assistant-msg-text': '#e2e8f0',
-    '--terminal-system-msg-bg': '#3b4252',
-    '--terminal-system-msg-text': '#d8dee9',
+    '--terminal-system-msg-bg': 'transparent',
+    '--terminal-system-msg-text': '#8ebbff',
     '--terminal-error-msg-bg': '#7f1d1d',
     '--terminal-error-msg-text': '#fecaca',
   } : {
@@ -139,7 +141,7 @@ export function Terminal({
     '--terminal-user-msg-text': '#1e3a8a',
     '--terminal-assistant-msg-bg': '#f3f4f6',
     '--terminal-assistant-msg-text': '#111827',
-    '--terminal-system-msg-bg': '#e5e7eb',
+    '--terminal-system-msg-bg': 'transparent',
     '--terminal-system-msg-text': '#374151',
     '--terminal-error-msg-bg': '#fee2e2',
     '--terminal-error-msg-text': '#7f1d1d',
@@ -190,6 +192,18 @@ export function Terminal({
       [isMac ? 'metaKey' : 'ctrlKey']: true,
       action: () => setShowSettings(!showSettings),
       description: `${isMac ? 'Cmd' : 'Ctrl'}+,: Open settings`,
+    },
+    // Add abort shortcuts
+    {
+      key: 'c',
+      ctrlKey: true,
+      action: () => {},
+      description: 'Abort current operation',
+    },
+    {
+      key: 'Escape',
+      action: () => {},
+      description: 'Abort current operation',
     },
   ];
 
@@ -310,11 +324,15 @@ export function Terminal({
       </div>
       <div 
         className="flex flex-col flex-grow overflow-auto terminal-scrollbar"
-        style={{ height: "calc(100% - 80px)" }} /* Leaving space for input and padding */
+        style={{ 
+          height: "calc(100% - 80px)", /* Leaving space for input and padding */
+          overscrollBehavior: 'contain', /* Prevent scroll chaining */
+        }}
         role="log"
         aria-live="polite"
         id={ids.output}
       >
+        {/* Main scrollable content area */}
         <div className="flex-grow overflow-y-auto">
           {/* Recalculate tools on each render to ensure updates */}
           {(() => {
@@ -336,22 +354,49 @@ export function Terminal({
                 ariaLabelledBy={ids.output}
                 toolExecutions={showToolVisualizations ? toolMap : {}}
                 showToolsInline={showToolVisualizations}
+                isDarkTheme={shouldUseDarkTerminal}
               />
             );
           })()}
-          
-          {/* Add typing indicator */}
-          {showTypingIndicator && terminalContext.typingIndicator && (
-            <TypingIndicator className="mx-4 my-2" />
-          )}
-          
-          {/* Fast Edit Mode Indicator - positioned inside the terminal */}
-          <FastEditModeIndicator 
-            sessionId={sessionId} 
-            className="mx-4 mb-2"
-          />
         </div>
         
+        {/* Fixed indicators area */}
+        <div className="flex-shrink-0 border-t border-gray-700/30">
+          {/* Status indicators container - fixed at bottom above input */}
+          <div className="flex justify-between items-center py-1">
+            {/* Typing indicator (left-aligned) */}
+            <div className="flex-1">
+              {showTypingIndicator && terminalContext.typingIndicator && (
+                <TypingIndicator className="mx-4" />
+              )}
+            </div>
+            
+            {/* Fast Edit Mode Indicator and Abort Button (right-aligned) */}
+            <div className="flex-shrink-0 flex items-center">
+              <FastEditModeIndicator 
+                sessionId={sessionId} 
+                className="mx-4" 
+              />
+              
+              {/* Add Abort Button conditionally when processing */}
+              {terminalContext.state.isProcessing && (
+                <div className="mx-2 -mt-0.5">
+                  <button
+                    onClick={() => wsTerminalContext.abortProcessing()}
+                    className="bg-red-600 hover:bg-red-700 text-white px-2.5 py-0.5 rounded-md text-xs flex items-center transition-colors"
+                    aria-label="Abort processing (Ctrl+C or Esc)"
+                    title="Abort processing (Ctrl+C or Esc in empty fields)"
+                    data-testid="inline-abort-button"
+                  >
+                    <span>Abort (Esc / Ctrl+C)</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+        
+        {/* Input field area */}
         <div className="flex-shrink-0" style={{ height: '40px', maxHeight: '40px', minHeight: '40px' }}>
           <InputField 
             ref={inputRef}

@@ -68,22 +68,22 @@
   animation: terminal-fade-in 0.2s ease-out forwards;
 }
 
-/* Terminal scrollbar styling */
+/* Terminal scrollbar styling - minimalistic version */
 .terminal-scrollbar::-webkit-scrollbar {
-  width: 8px;
+  width: 4px; /* Thinner scrollbar */
 }
 
 .terminal-scrollbar::-webkit-scrollbar-track {
-  background: var(--terminal-background);
+  background: transparent; /* Transparent track */
 }
 
 .terminal-scrollbar::-webkit-scrollbar-thumb {
-  background: var(--terminal-border);
+  background: rgba(127, 127, 127, 0.2); /* Very subtle gray with transparency */
   border-radius: 4px;
 }
 
 .terminal-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: var(--terminal-user-msg-bg);
+  background: rgba(127, 127, 127, 0.4); /* Slightly more visible on hover */
 }
 
 /* Add responsive design styles */
@@ -131,23 +131,49 @@
   max-width: calc(100% - 2rem); /* 1rem padding on each side */
 }
 
-/* Ensure proper scrolling with tool visualizations */
+/* Ensure proper scrolling with tool visualizations - minimalistic version */
 .terminal .terminal-scrollbar {
   scrollbar-width: thin;
-  scrollbar-color: var(--terminal-border) transparent;
+  scrollbar-color: rgba(127, 127, 127, 0.2) transparent; /* Very subtle scrollbar for Firefox */
 }
 
 .terminal .terminal-scrollbar::-webkit-scrollbar {
-  width: 6px;
+  width: 4px; /* Thinner scrollbar */
 }
 
 .terminal .terminal-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
+  background: transparent; /* Transparent track */
 }
 
 .terminal .terminal-scrollbar::-webkit-scrollbar-thumb {
-  background-color: var(--terminal-border);
-  border-radius: 3px;
+  background-color: rgba(127, 127, 127, 0.2); /* Very subtle gray with transparency */
+  border-radius: 4px;
+  transition: background-color 0.2s ease; /* Smooth transition on hover */
+}
+
+.terminal .terminal-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(127, 127, 127, 0.4); /* Slightly more visible on hover */
+}
+
+/* Add these styles to handle the aborted state */
+.tool-aborted {
+  @apply border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/20 opacity-75;
+  animation: tool-shake 0.5s ease-in-out;
+}
+
+.tool-aborted .tool-header {
+  @apply text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-700;
+}
+
+.tool-aborted .tool-body {
+  @apply bg-gray-100/50 dark:bg-gray-800/10 opacity-60;
+}
+
+/* Add shake animation for aborted tools */
+@keyframes tool-shake {
+  0%, 100% { transform: translateX(0); }
+  10%, 30%, 50%, 70%, 90% { transform: translateX(-2px); }
+  20%, 40%, 60%, 80% { transform: translateX(2px); }
 }
 
 /* Screen reader only class */

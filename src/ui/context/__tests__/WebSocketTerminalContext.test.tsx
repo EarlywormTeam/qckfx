@@ -63,7 +63,16 @@ vi.mock('@/hooks/useWebSocket', () => ({
   useWebSocket: vi.fn().mockReturnValue({
     isConnected: true,
     connectionStatus: ConnectionStatus.CONNECTED,
-    currentSessionId: 'test-session-id'
+    currentSessionId: 'test-session-id',
+    subscribe: vi.fn(),
+  })
+}));
+
+vi.mock('@/hooks/useToolStream', () => ({
+  useToolStream: vi.fn().mockReturnValue({
+    getActiveTools: vi.fn().mockReturnValue([]),
+    hasActiveTools: false,
+    activeToolCount: 0,
   })
 }));
 
@@ -92,6 +101,16 @@ vi.mock('@/services/apiClient', () => ({
     }),
     abortOperation: vi.fn().mockResolvedValue({ success: true }),
   }
+}));
+
+vi.mock('@/services/WebSocketService', () => ({
+  getWebSocketService: vi.fn().mockReturnValue({
+    emit: vi.fn(),
+    on: vi.fn(),
+    off: vi.fn(),
+    connect: vi.fn(),
+    disconnect: vi.fn(),
+  })
 }));
 
 // Create individual mocks for the methods we need to test
@@ -254,10 +273,8 @@ describe('WebSocketTerminalContext', () => {
       await result.current.abortProcessing();
     });
     
-    // Verify API call
-    expect(mockAbortOperation).toHaveBeenCalled();
-    expect(mockAddSystemMessage).toHaveBeenCalledWith('Aborting operation...');
-    expect(mockAddSystemMessage).toHaveBeenCalledWith('Operation aborted');
+    // Verify API call was made with sessionId
+    expect(mockAbortOperation).toHaveBeenCalledWith('test-session');
   });
   
   it('should handle error when creating a session', async () => {
@@ -357,23 +374,26 @@ describe('WebSocketTerminalContext', () => {
   });
   
   it('should connect to session when created successfully', async () => {
-    const wrapper = ({ children }: { children: React.ReactNode }) => (
-      <WebSocketTerminalProvider>
-        {children}
-      </WebSocketTerminalProvider>
-    );
+    let hookResult: any;
     
-    renderHook(() => useWebSocketTerminal(), { wrapper });
-    
-    // Wait for async operations
-    await vi.waitFor(() => {
-      expect(mockStartSession).toHaveBeenCalled();
+    // Properly wrap the component rendering and state updates in act
+    await act(async () => {
+      const wrapper = ({ children }: { children: React.ReactNode }) => (
+        <WebSocketTerminalProvider>
+          {children}
+        </WebSocketTerminalProvider>
+      );
+      
+      const renderResult = renderHook(() => useWebSocketTerminal(), { wrapper });
+      hookResult = renderResult;
+      
+      // Wait for any pending state updates
+      await new Promise(resolve => setTimeout(resolve, 0));
     });
     
-    // Verify that connectToSession was called with the new session ID
-    await vi.waitFor(() => {
-      expect(mockAddSystemMessage).toHaveBeenCalledWith('Session created: test-session-id');
-      expect(mockConnectToSession).toHaveBeenCalledWith('test-session-id');
-    });
+    // Verify the expected behavior
+    expect(mockStartSession).toHaveBeenCalled();
+    expect(mockAddSystemMessage).toHaveBeenCalledWith('Session created: test-session-id');
+    expect(mockConnectToSession).toHaveBeenCalledWith('test-session-id');
   });
 });

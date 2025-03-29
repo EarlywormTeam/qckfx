@@ -30,6 +30,7 @@ export interface MessageFeedProps {
   enableAnsiColors?: boolean;
   ariaLabelledBy?: string;
   showToolsInline?: boolean;
+  isDarkTheme?: boolean; // Add terminal theme property
 }
 
 export function MessageFeed({
@@ -39,7 +40,8 @@ export function MessageFeed({
   autoScroll = true,
   enableAnsiColors = true,
   ariaLabelledBy,
-  showToolsInline = true
+  showToolsInline = true,
+  isDarkTheme = false // Default to light theme
 }: MessageFeedProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
@@ -158,6 +160,7 @@ export function MessageFeed({
               showExecutionTime={true}
               compact={true} // Always use compact view
               className="mx-0" // Remove horizontal margin
+              isDarkTheme={isDarkTheme} // Pass terminal theme
             />
           </div>
         );

@@ -94,6 +94,7 @@ export enum WebSocketEvent {
   TOOL_EXECUTION_STARTED = 'tool_execution_started',
   TOOL_EXECUTION_COMPLETED = 'tool_execution_completed',
   TOOL_EXECUTION_ERROR = 'tool_execution_error',
+  TOOL_EXECUTION_ABORTED = 'tool_execution_aborted', // New event type for aborted tools
   PERMISSION_REQUESTED = 'permission_requested',
   PERMISSION_RESOLVED = 'permission_resolved',
   SESSION_UPDATED = 'session_updated',
@@ -172,6 +173,17 @@ export interface WebSocketEventMap {
     };
     paramSummary: string;
     timestamp: string;
+    isActive: false;
+    startTime?: string;
+  };
+  [WebSocketEvent.TOOL_EXECUTION_ABORTED]: {
+    sessionId: string;
+    tool: {
+      id: string;
+      name: string;
+    };
+    timestamp: string;
+    abortTimestamp: number;
     isActive: false;
     startTime?: string;
   };

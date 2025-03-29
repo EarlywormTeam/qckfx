@@ -132,8 +132,8 @@ export const apiClient = {
   /**
    * Abort the current operation
    */
-  abortOperation: () => 
-    apiRequest<void>(API_ENDPOINTS.ABORT, 'POST'),
+  abortOperation: (sessionId?: string) => 
+    apiRequest<void>(API_ENDPOINTS.ABORT, 'POST', sessionId ? { sessionId } : undefined),
   
   /**
    * Get conversation history

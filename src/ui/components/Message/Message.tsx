@@ -124,13 +124,14 @@ export function Message({
           backgroundColor: 'var(--terminal-system-msg-bg)',
           color: 'var(--terminal-system-msg-text)',
           fontStyle: 'italic',
-          // Removed hardcoded fontSize to inherit from parent
+          fontSize: '0.85em', // Slightly smaller than normal text and will scale with parent
         };
       case 'error':
         return {
           ...baseStyles,
           backgroundColor: 'var(--terminal-error-msg-bg)',
           color: 'var(--terminal-error-msg-text)',
+          fontSize: '0.85em', // Match system messages size
         };
       default:
         return baseStyles;
@@ -164,8 +165,11 @@ export function Message({
       
       {showTimestamp && timestamp && !isStreaming && (
         <div 
-          className="text-xs mt-1"
-          style={{ opacity: 0.7 }}
+          className="mt-1"
+          style={{ 
+            opacity: 0.7,
+            fontSize: '0.75em' // Make timestamp scale with parent message size
+          }}
           aria-hidden="true"
         >
           {timestamp.toLocaleTimeString()}

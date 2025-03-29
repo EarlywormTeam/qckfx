@@ -10,8 +10,10 @@ import { useTerminalWebSocket } from '@/hooks/useTerminalWebSocket';
 import { useStreamingMessages } from '@/hooks/useStreamingMessages';
 import { useTerminalCommands } from '@/hooks/useTerminalCommands';
 import { usePermissionManager } from '@/hooks/usePermissionManager';
-import { ConnectionStatus } from '@/types/api';
+import { useToolStream } from '@/hooks/useToolStream';
+import { ConnectionStatus, WebSocketEvent } from '@/types/api';
 import apiClient from '@/services/apiClient';
+import { getWebSocketService } from '@/services/WebSocketService';
 
 interface WebSocketTerminalContextProps {
   // Connection state
@@ -35,6 +37,50 @@ interface WebSocketTerminalContextProps {
   // Permission management
   hasPendingPermissions: boolean;
   resolvePermission: (permissionId: string, granted: boolean) => Promise<boolean>;
+}
+
+/**
+ * Get tools that were aborted for a specific session
+ * @param sessionId The session ID
+ * @returns Set of aborted tool IDs
+ */
+export function getAbortedTools(sessionId: string): Set<string> {
+  if (typeof window === 'undefined') return new Set();
+  
+  const abortedToolsJson = window.sessionStorage.getItem(`aborted_tools_${sessionId}`);
+  if (!abortedToolsJson) return new Set();
+  
+  try {
+    const abortedTools = JSON.parse(abortedToolsJson) as string[];
+    return new Set(abortedTools);
+  } catch {
+    return new Set();
+  }
+}
+
+/**
+ * Get abort timestamp for a specific session
+ * @param sessionId The session ID
+ * @returns Abort timestamp or null if not found
+ */
+export function getAbortTimestamp(sessionId: string): number | null {
+  if (typeof window === 'undefined') return null;
+  
+  const timestamp = window.sessionStorage.getItem(`abort_timestamp_${sessionId}`);
+  return timestamp ? parseInt(timestamp, 10) : null;
+}
+
+/**
+ * Check if an event happened after the abort
+ * @param sessionId The session ID
+ * @param timestamp The event timestamp
+ * @returns True if event happened after abort
+ */
+export function isEventAfterAbort(sessionId: string, timestamp: number): boolean {
+  const abortTimestamp = getAbortTimestamp(sessionId);
+  if (!abortTimestamp) return false;
+  
+  return timestamp > abortTimestamp;
 }
 
 // Create the context
@@ -89,7 +135,7 @@ export function WebSocketTerminalProvider({
     try {
       // Update UI state
       setProcessing(true);
-      addSystemMessage('Creating new session...');
+      // Don't add a system message when creating a session - handled by the initialization process
       
       console.log('[WebSocketTerminalContext] Requesting new session from API...');
       
@@ -125,7 +171,7 @@ export function WebSocketTerminalProvider({
           connectToSession(newSessionId);
         }
         
-        addSystemMessage(`Session created: ${newSessionId}`);
+        // Don't show session ID to users - they don't need to see this
         return newSessionId;
       } else {
         console.error('[WebSocketTerminalContext] Failed to create session - invalid response:', response);
@@ -140,6 +186,9 @@ export function WebSocketTerminalProvider({
     }
   }, [addSystemMessage, addErrorMessage, setProcessing, isConnected, connectToSession]);
   
+  // Get the tool stream for abort processing
+  const toolStream = useToolStream();
+
   // Abort processing with error handling
   const abortProcessing = useCallback(async () => {
     const currentSessionId = sessionIdRef.current;
@@ -150,19 +199,67 @@ export function WebSocketTerminalProvider({
     }
     
     try {
+      // Immediately update UI state
       setProcessing(false);
-      addSystemMessage('Aborting operation...');
       
-      const response = await apiClient.abortOperation();
+      // Get active tools before aborting to find which ones to mark
+      const activeTools = toolStream?.getActiveTools() || [];
+      const activeToolIds = new Set(activeTools.map(tool => tool.id));
+      
+      // Create a timestamp for the abort event 
+      const abortTimestamp = Date.now();
+      
+      // Use the API client to abort the operation
+      const response = await apiClient.abortOperation(currentSessionId);
+      
       if (response.success) {
-        addSystemMessage('Operation aborted');
+        // Don't add system messages - rely on visual indicators only
+        
+        // Get the WebSocket service to emit events
+        const wsService = getWebSocketService();
+        
+        // Add an aborted result to each active tool
+        if (activeTools.length > 0) {
+          for (const tool of activeTools) {
+            // Create abort result event
+            const abortEvent = {
+              sessionId: currentSessionId,
+              tool: {
+                id: tool.id,
+                name: tool.toolName || 'Tool',
+              },
+              result: {
+                aborted: true,
+                abortTimestamp
+              },
+              timestamp: new Date().toISOString(),
+              executionTime: 0, // No execution time for aborted operations
+            };
+            
+            // Emit tool completion with abort result
+            wsService.emit(WebSocketEvent.TOOL_EXECUTION_COMPLETED, abortEvent);
+          }
+          
+          // Remember aborted tools to ignore late events
+          if (typeof window !== 'undefined') {
+            window.sessionStorage.setItem(
+              `aborted_tools_${currentSessionId}`, 
+              JSON.stringify([...activeToolIds])
+            );
+            
+            window.sessionStorage.setItem(
+              `abort_timestamp_${currentSessionId}`,
+              abortTimestamp.toString()
+            );
+          }
+        }
       } else {
         throw new Error(response.error?.message || 'Failed to abort operation');
       }
     } catch (error) {
       addErrorMessage(`Failed to abort: ${error instanceof Error ? error.message : String(error)}`);
     }
-  }, [addSystemMessage, addErrorMessage, setProcessing]);
+  }, [addSystemMessage, addErrorMessage, setProcessing, toolStream]);
   
   // Automatically create a session on mount if none provided, with retries
   useEffect(() => {

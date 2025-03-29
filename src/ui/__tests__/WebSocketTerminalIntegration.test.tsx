@@ -17,6 +17,14 @@ vi.mock('@/services/apiClient', () => ({
     }),
     sendQuery: vi.fn().mockResolvedValue({ success: true }),
     abortOperation: vi.fn().mockResolvedValue({ success: true }),
+    getFastEditMode: vi.fn().mockResolvedValue({ 
+      success: true, 
+      data: { fastEditMode: false } 
+    }),
+    toggleFastEditMode: vi.fn().mockResolvedValue({ 
+      success: true, 
+      data: { fastEditMode: true }
+    }),
   }
 }));
 

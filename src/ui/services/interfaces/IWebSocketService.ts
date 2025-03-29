@@ -19,6 +19,10 @@ export interface IWebSocketService extends EventEmitter {
   isConnected(): boolean;
   getConnectionStatus(): ConnectionStatus;
   
+  // Abort handling
+  isSessionAborted(sessionId: string): boolean;
+  getAbortTimestamp(sessionId: string): number | undefined;
+  
   // Testing/cleanup helpers
   reset(): void;
   

@@ -4,7 +4,9 @@
 
 import { LogCategory, LogLevel, LoggerOptions } from '../types/logger';
 
-export { LogCategory, LogLevel, LoggerOptions };
+// Re-export both as enums (values) and types
+export { LogCategory, LogLevel };
+export type { LoggerOptions };
 
 /**
  * Logger class for application logging

@@ -21,6 +21,7 @@ export * from './useTerminalCommands';
 export * from './usePermissionManager';
 export * from './useFastEditMode';
 export * from './useFastEditModeKeyboardShortcut';
+export * from './useAbortShortcuts';
 
 // Default exports
 export { default as useKeyboardShortcuts } from './useKeyboardShortcuts';
@@ -37,3 +38,4 @@ export { default as useTerminalCommands } from './useTerminalCommands';
 export { default as usePermissionManager } from './usePermissionManager';
 export { default as useFastEditMode } from './useFastEditMode';
 export { default as useFastEditModeKeyboardShortcut } from './useFastEditModeKeyboardShortcut';
+export { default as useAbortShortcuts } from './useAbortShortcuts';

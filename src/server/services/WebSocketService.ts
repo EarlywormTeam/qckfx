@@ -22,6 +22,7 @@ export enum WebSocketEvent {
   TOOL_EXECUTION_STARTED = 'tool_execution_started',
   TOOL_EXECUTION_COMPLETED = 'tool_execution_completed',
   TOOL_EXECUTION_ERROR = 'tool_execution_error',
+  TOOL_EXECUTION_ABORTED = 'tool_execution_aborted',
   PERMISSION_REQUESTED = 'permission_requested',
   PERMISSION_RESOLVED = 'permission_resolved',
   PERMISSION_TIMEOUT = 'permission_timeout',
@@ -460,6 +461,30 @@ export class WebSocketService {
       });
       
       serverLogger.debug(`Tool execution error: ${tool.name} (${tool.id}) in session ${sessionId}, error: ${error.message}`);
+    });
+    
+    // Tool execution aborted
+    this.agentService.on(AgentServiceEvent.TOOL_EXECUTION_ABORTED, ({ sessionId, tool, timestamp, abortTimestamp }) => {
+      // Remove from active tools
+      const activeToolData = this.activeTools.get(sessionId)?.get(tool.id);
+      this.activeTools.get(sessionId)?.delete(tool.id);
+      
+      // Clean up empty maps
+      if (this.activeTools.get(sessionId)?.size === 0) {
+        this.activeTools.delete(sessionId);
+      }
+      
+      // Forward the event to clients
+      this.io.to(sessionId).emit(WebSocketEvent.TOOL_EXECUTION_ABORTED, { 
+        sessionId,
+        tool,
+        timestamp,
+        abortTimestamp,
+        isActive: false,
+        startTime: activeToolData?.startTime.toISOString(),
+      });
+      
+      serverLogger.debug(`Tool execution aborted: ${tool.name} (${tool.id}) in session ${sessionId}`);
     });
 
     // Permission requested

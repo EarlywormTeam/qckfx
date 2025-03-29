@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 
 interface AnnouncerProps {
-  messages: { id: string; content: string }[];
+  messages: { id: string; content: string; role?: string }[];
   assertive?: boolean;
 }
 
@@ -16,7 +16,14 @@ export function Announcer({ messages, assertive = false }: AnnouncerProps) {
     if (messages.length > 0) {
       const latestMessage = messages[messages.length - 1];
       
-      if (latestMessage.content !== lastMessage) {
+      // Check for abort-related system messages
+      if (latestMessage.role === 'system' && 
+          (latestMessage.content.includes('aborted') || 
+           latestMessage.content.includes('Aborting'))) {
+        setLastMessage('Operation aborted');
+      }
+      // Standard announcement behavior
+      else if (latestMessage.content !== lastMessage) {
         setLastMessage(latestMessage.content);
       }
     }

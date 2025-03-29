@@ -10,6 +10,7 @@ import { TypingIndicator as _TypingIndicator } from './TypingIndicator';
 import { useWebSocketTerminal } from '@/context/WebSocketTerminalContext';
 import { useTerminal } from '@/context/TerminalContext';
 import { usePermissionKeyboardHandler } from '@/hooks/usePermissionKeyboardHandler';
+import { useAbortShortcuts } from '@/hooks/useAbortShortcuts';
 
 interface WebSocketTerminalProps {
   className?: string;
@@ -45,6 +46,9 @@ export function WebSocketTerminal({
   
   // Add keyboard handler for permission requests
   usePermissionKeyboardHandler({ sessionId });
+  
+  // Add keyboard handler for abort operations
+  useAbortShortcuts(isConnected);
   
   // Check if we've ever connected and store the sessionId
   useEffect(() => {
@@ -88,17 +92,7 @@ export function WebSocketTerminal({
       
       {/* Permissions are now handled through the ToolVisualization component */}
       
-      {(isProcessing || isStreaming) && (
-        <div className="absolute bottom-14 right-4">
-          <button
-            onClick={() => abortProcessing()}
-            className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm"
-            aria-label="Abort processing"
-          >
-            Abort
-          </button>
-        </div>
-      )}
+      {/* Abort button is now integrated into the Terminal component */}
     </div>
   );
 }

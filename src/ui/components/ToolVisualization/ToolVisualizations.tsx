@@ -8,6 +8,7 @@ export interface ToolVisualizationsProps {
   className?: string;
   maxVisible?: number;
   compact?: boolean;
+  sessionId?: string;
 }
 
 export function ToolVisualizations({
@@ -15,6 +16,7 @@ export function ToolVisualizations({
   className,
   maxVisible = 3,
   compact = false,
+  sessionId,
 }: ToolVisualizationsProps) {
   const [expandedTools, setExpandedTools] = useState<Record<string, boolean>>({});
   
@@ -42,6 +44,7 @@ export function ToolVisualizations({
           compact={compact}
           showExpandedParams={expandedTools[tool.id]}
           onToggleExpand={() => toggleExpand(tool.id)}
+          sessionId={sessionId}
         />
       ))}
       

@@ -74,11 +74,11 @@ export function useTerminalWebSocket(sessionId?: string) {
   useEffect(() => {
     // Event handlers for session state changes
     const handleSessionChange = (newSessionId: string | null) => {
-      // Only show messages for the session we care about
+      // Only log session changes but don't show system messages
       if (newSessionId === sessionId) {
-        addSystemMessage(`Connected to session: ${newSessionId}`);
+        console.log(`Connected to session: ${newSessionId}`);
       } else if (newSessionId === null && previousSessionIdRef.current === sessionId) {
-        addSystemMessage('Disconnected from session');
+        console.log('Disconnected from session');
       }
     };
     
@@ -124,14 +124,16 @@ export function useTerminalWebSocket(sessionId?: string) {
     // Handle connection status changes to show UI notifications
     switch (connectionStatus) {
       case ConnectionStatus.CONNECTED:
-        // Only show the connection message if we weren't already connected
+        // Only log connection status but don't show system message
         if (prevConnectionStatusRef.current !== ConnectionStatus.CONNECTED) {
-          addSystemMessage('WebSocket connection established');
+          console.log('WebSocket connection established');
         }
         break;
         
       case ConnectionStatus.RECONNECTING:
-        addSystemMessage('Reconnecting WebSocket...');
+        // Don't show reconnection messages in the UI
+        // Just log to console instead
+        console.log('Reconnecting WebSocket...');
         break;
         
       case ConnectionStatus.ERROR:
@@ -139,9 +141,9 @@ export function useTerminalWebSocket(sessionId?: string) {
         break;
         
       case ConnectionStatus.DISCONNECTED:
-        // Only show disconnection if we were previously connected (not on initial mount)
+        // Only log disconnection if we were previously connected (not on initial mount)
         if (prevConnectionStatusRef.current === ConnectionStatus.CONNECTED) {
-          addErrorMessage('WebSocket disconnected');
+          console.log('WebSocket disconnected');
         }
         break;
     }

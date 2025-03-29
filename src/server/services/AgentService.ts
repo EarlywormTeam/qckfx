@@ -28,6 +28,7 @@ export enum AgentServiceEvent {
   TOOL_EXECUTION_STARTED = 'tool:execution:started',
   TOOL_EXECUTION_COMPLETED = 'tool:execution:completed',
   TOOL_EXECUTION_ERROR = 'tool:execution:error',
+  TOOL_EXECUTION_ABORTED = 'tool:execution:aborted', // New event for aborted tools
   
   // Permission events
   PERMISSION_REQUESTED = 'permission:requested',
@@ -78,6 +79,7 @@ export class AgentService extends EventEmitter {
   private activeProcessingSessionIds: Set<string> = new Set();
   private permissionRequests: Map<string, PermissionRequest> = new Map();
   private sessionFastEditMode: Map<string, boolean> = new Map();
+  private activeTools: Map<string, Array<{toolId: string; name: string; startTime: Date; paramSummary: string}>> = new Map();
   
   /**
    * Creates a concise summary of tool arguments for display
@@ -153,6 +155,7 @@ export class AgentService extends EventEmitter {
 
     try {
       // Mark the session as processing
+      // Note: Abort status will be cleared in AgentRunner.processQuery when a new message is received
       this.activeProcessingSessionIds.add(sessionId);
       sessionManager.updateSession(sessionId, { isProcessing: true });
 
@@ -236,6 +239,19 @@ export class AgentService extends EventEmitter {
         const tool = agent.toolRegistry.getTool(toolId);
         const toolName = tool?.name || toolId;
         const paramSummary = this.summarizeToolParameters(toolId, args);
+        const startTime = new Date();
+        
+        // Track this tool as active
+        if (!this.activeTools.has(sessionId)) {
+          this.activeTools.set(sessionId, []);
+        }
+        
+        this.activeTools.get(sessionId)?.push({
+          toolId,
+          name: toolName,
+          startTime,
+          paramSummary
+        });
         
         this.emit(AgentServiceEvent.TOOL_EXECUTION_STARTED, {
           sessionId,
@@ -245,7 +261,7 @@ export class AgentService extends EventEmitter {
           },
           args,
           paramSummary,
-          timestamp: new Date().toISOString(),
+          timestamp: startTime.toISOString(),
         });
       });
       
@@ -253,6 +269,13 @@ export class AgentService extends EventEmitter {
         const tool = agent.toolRegistry.getTool(toolId);
         const toolName = tool?.name || toolId;
         const paramSummary = this.summarizeToolParameters(toolId, args);
+        
+        // Remove this tool from active tools
+        if (this.activeTools.has(sessionId)) {
+          const activeTools = this.activeTools.get(sessionId) || [];
+          const updatedTools = activeTools.filter(t => t.toolId !== toolId);
+          this.activeTools.set(sessionId, updatedTools);
+        }
         
         // Emit the standard tool execution event for consistency
         this.emit(AgentServiceEvent.TOOL_EXECUTION, { 
@@ -282,6 +305,13 @@ export class AgentService extends EventEmitter {
         const tool = agent.toolRegistry.getTool(toolId);
         const toolName = tool?.name || toolId;
         const paramSummary = this.summarizeToolParameters(toolId, args);
+        
+        // Remove this tool from active tools
+        if (this.activeTools.has(sessionId)) {
+          const activeTools = this.activeTools.get(sessionId) || [];
+          const updatedTools = activeTools.filter(t => t.toolId !== toolId);
+          this.activeTools.set(sessionId, updatedTools);
+        }
         
         this.emit(AgentServiceEvent.TOOL_EXECUTION_ERROR, {
           sessionId,
@@ -442,12 +472,52 @@ export class AgentService extends EventEmitter {
       return false;
     }
 
-    // Mark the session as not processing
-    sessionManager.updateSession(sessionId, { isProcessing: false });
+    // Create abort timestamp
+    const abortTimestamp = Date.now();
+    
+    // Directly modify the session state in place instead of creating a new object
+    // This ensures all references to this session state object see the changes
+    if (!session.state) {
+      session.state = { conversationHistory: [] }; // Ensure state exists with required properties
+    }
+    
+    // Set the abort flags directly on the existing state object
+    session.state.__aborted = true;
+    session.state.__abortTimestamp = abortTimestamp;
+    
+    // Get active tools for this session before we mark it as not processing
+    const activeTools = this.getActiveTools(sessionId);
+    
+    // Update the session with modified state object
+    // Since we modified the state object in place, any code holding a reference
+    // to session.state will see these changes
+    sessionManager.updateSession(sessionId, { 
+      isProcessing: false,
+      // We don't need to include state in the update since we modified it in place
+    });
+    
+    // Also remove from active processing set
     this.activeProcessingSessionIds.delete(sessionId);
 
-    // Emit abort event
-    this.emit(AgentServiceEvent.PROCESSING_ABORTED, { sessionId });
+    // Emit abort event with timestamp
+    this.emit(AgentServiceEvent.PROCESSING_ABORTED, { 
+      sessionId,
+      timestamp: new Date().toISOString(),
+      abortTimestamp
+    });
+    
+    // For each active tool, emit a tool abortion event
+    for (const tool of activeTools) {
+      this.emit(AgentServiceEvent.TOOL_EXECUTION_ABORTED, {
+        sessionId,
+        tool: {
+          id: tool.toolId,
+          name: tool.name,
+        },
+        timestamp: new Date().toISOString(),
+        abortTimestamp
+      });
+    }
 
     return true;
   }
@@ -498,6 +568,13 @@ export class AgentService extends EventEmitter {
    */
   public getFastEditMode(sessionId: string): boolean {
     return this.sessionFastEditMode.get(sessionId) || false;
+  }
+  
+  /**
+   * Get active tools for a session
+   */
+  public getActiveTools(sessionId: string): Array<{toolId: string; name: string; startTime: Date; paramSummary: string}> {
+    return this.activeTools.get(sessionId) || [];
   }
 }
 

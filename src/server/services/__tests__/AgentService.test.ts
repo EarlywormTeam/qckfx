@@ -240,21 +240,38 @@ describe('AgentService', () => {
       const abortHandler = jest.fn();
       agentService.on(AgentServiceEvent.PROCESSING_ABORTED, abortHandler);
 
-      // Abort the operation
-      const result = agentService.abortOperation('mock-session-id');
+      // Mock Date.now() to return a consistent timestamp for testing
+      const originalDateNow = Date.now;
+      const mockTimestamp = 1743222408803;
+      Date.now = jest.fn(() => mockTimestamp);
 
-      // Verify session was updated
-      expect(sessionManager.updateSession).toHaveBeenCalledWith('mock-session-id', {
-        isProcessing: false,
-      });
+      try {
+        // Abort the operation
+        const result = agentService.abortOperation('mock-session-id');
 
-      // Verify event was emitted
-      expect(abortHandler).toHaveBeenCalledWith({
-        sessionId: 'mock-session-id',
-      });
+        // Verify session was updated with the aborted flag and timestamp
+        expect(sessionManager.updateSession).toHaveBeenCalledWith('mock-session-id', {
+          isProcessing: false,
+          state: {
+            conversationHistory: [],
+            __aborted: true,
+            __abortTimestamp: mockTimestamp
+          }
+        });
 
-      // Verify result
-      expect(result).toBe(true);
+        // Verify event was emitted with timestamp
+        expect(abortHandler).toHaveBeenCalledWith({
+          sessionId: 'mock-session-id',
+          timestamp: expect.any(String),
+          abortTimestamp: mockTimestamp
+        });
+
+        // Verify result
+        expect(result).toBe(true);
+      } finally {
+        // Restore the original Date.now
+        Date.now = originalDateNow;
+      }
     });
 
     it('should return false if the session is not processing', () => {

@@ -25,6 +25,8 @@ export interface ToolResultEntry {
   args: Record<string, unknown>;
   result: unknown;
   toolUseId?: string;
+  /** Whether the tool execution was aborted */
+  aborted?: boolean;
 }
 
 export interface ProcessQueryResult {
@@ -36,6 +38,8 @@ export interface ProcessQueryResult {
   sessionState: Record<string, unknown>;
   done: boolean;
   error?: string;
+  /** Whether the operation was aborted */
+  aborted?: boolean;
 }
 
 export interface ConversationResult {

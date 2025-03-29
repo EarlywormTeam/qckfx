@@ -11,8 +11,8 @@
   --terminal-user-msg-text-color: #e2e8f0;
   --terminal-assistant-msg-bg-color: #1f2937;
   --terminal-assistant-msg-text-color: #e2e8f0;
-  --terminal-system-msg-bg-color: #3b4252;
-  --terminal-system-msg-text-color: #d8dee9;
+  --terminal-system-msg-bg-color: transparent;
+  --terminal-system-msg-text-color: #8ebbff; /* Lighter blue for better visibility */
   --terminal-error-msg-bg-color: #7f1d1d;
   --terminal-error-msg-text-color: #fecaca;
   --terminal-tool-msg-bg-color: #1e293b;

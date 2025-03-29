@@ -8,12 +8,6 @@ import { useWebSocketContext } from './WebSocketContext';
 const initialState: TerminalState = {
   messages: [
     {
-      id: 'welcome',
-      content: 'Welcome to qckfx Terminal',
-      type: 'system',
-      timestamp: new Date(),
-    },
-    {
       id: 'greeting',
       content: 'How can I help you today?',
       type: 'assistant',
@@ -52,12 +46,7 @@ function terminalReducer(state: TerminalState, action: TerminalAction): Terminal
       return {
         ...state,
         messages: [
-          {
-            id: `clear-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
-            content: 'Terminal cleared',
-            type: 'system',
-            timestamp: new Date(),
-          },
+          // No need for a message after clearing
         ],
       };
       
@@ -241,7 +230,7 @@ export const TerminalProvider: React.FC<{ children: ReactNode }> = ({ children }
         type: 'ADD_MESSAGE', 
         payload: {
           id: generateUniqueId('system'),
-          content: 'Query processing was aborted',
+          content: 'Operation stopped. You can continue with a new message.',
           type: 'system',
           timestamp: new Date()
         }

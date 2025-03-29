@@ -17,6 +17,8 @@ export interface ToolCallResponse {
   toolCall?: ToolCall;
   toolChosen: boolean;
   response?: Anthropic.Messages.Message;
+  /** Whether the operation was aborted */
+  aborted?: boolean;
 }
 
 export type MessageTokenUsage = {
@@ -45,6 +47,10 @@ export interface SessionState {
   shouldExplore?: boolean;
   tokenUsage?: TokenUsage;
   historyTrimmed?: boolean;
+  /** Whether the session has been aborted */
+  __aborted?: boolean;
+  /** Timestamp when the session was aborted */
+  __abortTimestamp?: number;
   [key: string]: unknown;
 }
 

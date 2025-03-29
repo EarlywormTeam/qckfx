@@ -23,8 +23,10 @@ export const FastEditModeIndicator: React.FC<FastEditModeIndicatorProps> = ({
     justifyContent: 'flex-end',
     gap: '6px',
     padding: '6px 12px',
-    fontSize: '12px',
-    fontWeight: 'bold',
+    fontSize: '11px',
+    fontWeight: 'normal',
+    opacity: 0.8,
+    textAlign: 'right',
   };
 
   // Triangle icon style

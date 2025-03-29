@@ -26,12 +26,18 @@ export function TypingIndicator({
       aria-live="polite"
       role="status"
       data-testid="typing-indicator"
+      style={{
+        fontSize: '11px',
+        fontWeight: 'normal',
+        opacity: 0.8,
+        textAlign: 'left',
+      }}
     >
-      <div className="text-sm text-gray-500">Agent is thinking</div>
+      <div className="text-gray-500">Agent is thinking</div>
       <div className="flex gap-1">
-        <div className="h-2 w-2 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '0ms' }} />
-        <div className="h-2 w-2 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '200ms' }} />
-        <div className="h-2 w-2 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '400ms' }} />
+        <div className="h-1.5 w-1.5 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+        <div className="h-1.5 w-1.5 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '200ms' }} />
+        <div className="h-1.5 w-1.5 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '400ms' }} />
       </div>
     </div>
   );
