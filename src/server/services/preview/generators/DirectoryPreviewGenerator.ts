@@ -41,18 +41,45 @@ export class DirectoryPreviewGenerator extends PreviewGenerator {
         return null;
       }
       
+      serverLogger.debug('DirectoryPreviewGenerator: received result', {
+        resultType: typeof result,
+        resultKeys: result && typeof result === 'object' ? Object.keys(result) : [],
+        success: result && typeof result === 'object' && 'success' in result ? result.success : 'unknown'
+      });
+      
       const resultObj = result as { 
         entries?: unknown[];
         files?: unknown[];
+        success?: boolean;
+        path?: string;
       };
       
-      const dirPath = args.path as string || '.';
+      const dirPath = args.path as string || resultObj.path || '.';
+      
+      // Check if we have entries
+      if (!resultObj.entries && !resultObj.files) {
+        serverLogger.warn(`DirectoryPreviewGenerator: No entries found in result for ${dirPath}`);
+        return {
+          contentType: PreviewContentType.TEXT,
+          briefContent: `Directory: ${dirPath}\n\nEmpty directory or no entries found.`,
+          hasFullContent: false,
+          metadata: {
+            path: dirPath,
+            totalEntries: 0,
+            totalFiles: 0,
+            totalDirectories: 0
+          }
+        };
+      }
       
       // Get entries from result, handling different formats and enforce array type
       const rawEntries = resultObj.entries || resultObj.files || [];
       const entries = rawEntries as Array<{
         name: string;
         isDirectory: boolean;
+        isFile?: boolean;
+        isSymbolicLink?: boolean;
+        type?: string;
         size?: number;
         mtime?: string;
         modified?: Date;
@@ -65,7 +92,9 @@ export class DirectoryPreviewGenerator extends PreviewGenerator {
         entriesEmpty: entries.length === 0,
         firstEntryIfExists: entries.length > 0 ? {
           name: entries[0].name,
-          isDirectory: entries[0].isDirectory
+          isDirectory: entries[0].isDirectory,
+          hasType: entries[0].type !== undefined,
+          type: entries[0].type
         } : 'none'
       });
       
@@ -136,10 +165,15 @@ export class DirectoryPreviewGenerator extends PreviewGenerator {
       typeof result === 'object' &&
       (
         // For LSToolSuccessResult format
-        ('success' in result && result.success === true && 
-          ('entries' in result || 'files' in result || 'count' in result)
+        ('success' in result && 
+          (
+            // Either it has entries, files, or count
+            ('entries' in result || 'files' in result || 'count' in result) ||
+            // Or it's an error result with an error message
+            (result.success === false && 'error' in result && typeof result.error === 'string')
+          )
         ) ||
-        // For other formats
+        // For other formats that don't have explicit success flag
         ('entries' in result || 'files' in result)
       )
     );
@@ -149,17 +183,39 @@ export class DirectoryPreviewGenerator extends PreviewGenerator {
    * Format directory listing for brief preview
    */
   private formatDirectoryListing(
-    entries: Array<{name: string; isDirectory: boolean; size?: number}>,
+    entries: Array<{
+      name: string; 
+      isDirectory?: boolean; 
+      isFile?: boolean;
+      isSymbolicLink?: boolean;
+      type?: string;
+      size?: number
+    }>,
     path: string
   ): string {
     let output = `Directory: ${path}\n\n`;
     
-    if (entries.length === 0) {
+    if (!entries || entries.length === 0) {
       return output + 'Empty directory';
     }
     
     for (const entry of entries) {
-      const type = entry.isDirectory ? 'dir' : 'file';
+      // Determine entry type from all available properties
+      let type = 'file'; // Default to file
+      
+      if (entry.type) {
+        // If we have an explicit type property, use that
+        type = entry.type === 'directory' || entry.type === 'dir' ? 'dir' :
+               entry.type === 'symlink' ? 'sym' :
+               entry.type === 'file' ? 'file' : 'other';
+      } else if (entry.isDirectory) {
+        type = 'dir';
+      } else if (entry.isSymbolicLink) {
+        type = 'sym';
+      } else if (entry.isFile) {
+        type = 'file';
+      }
+      
       const size = entry.size !== undefined ? `${this.formatSize(entry.size)}` : '';
       output += `[${type}] ${entry.name} ${size}\n`;
     }

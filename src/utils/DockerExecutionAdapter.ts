@@ -508,12 +508,12 @@ export class DockerExecutionAdapter implements ExecutionAdapter {
       let command: string;
       
       if (details) {
-        // Use a more efficient approach to get all details in one command
-        // This uses find with -printf to get all the information we need in one go
-        command = `find "${containerPath}" -maxdepth 1 -mindepth 1 ${showHidden ? '' : '-not -name ".*"'} -printf "%f|%y|%s|%T@|%A@\\n"`;
+        // Use BusyBox compatible commands instead of GNU find with -printf
+        // Use ls -la for detailed listing with all information
+        command = `ls -la "${containerPath}" ${showHidden ? '' : '| grep -v "^\\..*"'}`;
       } else {
         // Simple listing
-        command = `ls -1${showHidden ? 'a' : ''} "${containerPath}"`;
+        command = `ls -1${showHidden ? 'a' : ''} "${containerPath}" ${showHidden ? '' : '| grep -v "^\\..*"'}`;
       }
       
       const { stdout, stderr, exitCode: lsExitCode } = await this.executeCommand(command);
@@ -530,63 +530,123 @@ export class DockerExecutionAdapter implements ExecutionAdapter {
       const results: FileEntry[] = [];
       
       if (details) {
-        // Parse the detailed output from find
+        // Parse the detailed output from ls -la
+        // Example output: 
+        // total 24
+        // drwxr-xr-x 2 user user 4096 Apr 19 12:34 .
+        // drwxr-xr-x 3 user user 4096 Apr 19 12:34 ..
+        // -rw-r--r-- 1 user user  123 Apr 19 12:34 file.txt
+        // drwxr-xr-x 2 user user 4096 Apr 19 12:34 dir
+        // lrwxrwxrwx 1 user user    8 Apr 19 12:34 link -> file.txt
+        
         const lines = stdout.trim().split('\n');
         
-        for (const line of lines) {
+        // Skip the first line which shows the total size
+        for (let i = 1; i < lines.length; i++) {
+          const line = lines[i].trim();
           if (!line) continue;
           
-          const [name, type, size, mtime, ctime] = line.split('|');
+          // Split by whitespace, but be aware that filenames might contain spaces
+          const parts = line.split(/\s+/);
+          if (parts.length < 7) continue; // Need at least enough parts for a valid entry
           
-          if (!name) continue;
+          // First character of permissions indicates type
+          const typeChar = parts[0][0];
+          const isDirectory = typeChar === 'd';
+          const isSymbolicLink = typeChar === 'l';
+          const isFile = typeChar === '-';
           
-          // Convert type from find's format to our format
-          const entryType = type === 'd' ? 'directory' : 
-                           type === 'f' ? 'file' : 
-                           type === 'l' ? 'symlink' : 'other';
+          // Determine the entry name - it's everything after the timestamp
+          // This is tricky because filenames can have spaces
+          const dateTimeParts = 5; // Assuming we have at least "Apr 19 12:34" (5 parts)
+          const nameStart = parts.slice(0, 5 + dateTimeParts).join(' ').length + 1;
+          let name = line.substring(nameStart).trim();
           
+          // For symlinks, remove the " -> target" part
+          if (isSymbolicLink && name.includes(' -> ')) {
+            name = name.split(' -> ')[0];
+          }
+          
+          // Skip . and .. entries
+          if (name === '.' || name === '..') continue;
+          
+          // Get the size
+          const size = parseInt(parts[4], 10);
+          
+          // Add the entry
           results.push({
             name,
-            type: entryType,
-            size: parseInt(size, 10),
-            modified: new Date(parseFloat(mtime) * 1000),
-            created: new Date(parseFloat(ctime) * 1000),
-            isDirectory: type === 'd',
-            isFile: type === 'f',
-            isSymbolicLink: type === 'l'
+            type: isDirectory ? 'directory' : isFile ? 'file' : isSymbolicLink ? 'symlink' : 'other',
+            size: isNaN(size) ? 0 : size,
+            isDirectory,
+            isFile,
+            isSymbolicLink
           });
         }
+        
+        // Log the results for debugging
+        this.logger?.debug(`Parsed ${results.length} entries from ls -la output`, LogCategory.TOOLS);
       } else {
-        // Parse simple ls output
+        // For simple listing, just do an ls -la anyway to get the file types correctly
+        // This avoids multiple commands and is more efficient
+        const { stdout: detailedOutput } = await this.executeCommand(`ls -la "${containerPath}"`);
+        const detailedLines = detailedOutput.trim().split('\n');
+        
+        // Parse detailed output to get file types
+        const typeMap = new Map<string, { isDir: boolean, isFile: boolean, isLink: boolean }>();
+        
+        // Skip the first line which shows the total size
+        for (let i = 1; i < detailedLines.length; i++) {
+          const line = detailedLines[i].trim();
+          if (!line) continue;
+          
+          // Split by whitespace
+          const parts = line.split(/\s+/);
+          if (parts.length < 7) continue;
+          
+          // First character of permissions indicates type
+          const typeChar = parts[0][0];
+          
+          // Determine the entry name
+          const dateTimeParts = 5; // Assuming we have at least "Apr 19 12:34" (5 parts)
+          const nameStart = parts.slice(0, 5 + dateTimeParts).join(' ').length + 1;
+          let name = line.substring(nameStart).trim();
+          
+          // For symlinks, remove the " -> target" part
+          if (typeChar === 'l' && name.includes(' -> ')) {
+            name = name.split(' -> ')[0];
+          }
+          
+          // Skip . and .. entries
+          if (name === '.' || name === '..') continue;
+          
+          // Skip hidden files if not showing them
+          if (!showHidden && name.startsWith('.')) continue;
+          
+          typeMap.set(name, {
+            isDir: typeChar === 'd',
+            isFile: typeChar === '-',
+            isLink: typeChar === 'l'
+          });
+        }
+        
+        // Now process the simple listing
         const entries = stdout.trim().split('\n')
           .filter(name => name && name !== '.' && name !== '..');
         
-        // Get basic type info for all entries in one command
-        const typeCommand = entries.map(name => {
-          const entryPath = path.join(containerPath, name);
-          return `[ -d "${entryPath}" ] && echo "${name}|dir" || [ -f "${entryPath}" ] && echo "${name}|file" || [ -L "${entryPath}" ] && echo "${name}|symlink" || echo "${name}|other"`;
-        }).join('; ');
-        
-        const { stdout: typeOutput } = await this.executeCommand(typeCommand);
-        
-        // Parse type information
-        const typeMap = new Map<string, string>();
-        typeOutput.trim().split('\n').forEach(line => {
-          const [name, type] = line.split('|');
-          if (name && type) {
-            typeMap.set(name, type);
-          }
-        });
-        
-        // Build results
         for (const name of entries) {
-          const type = typeMap.get(name) || 'other';
+          const typeInfo = typeMap.get(name) || { isDir: false, isFile: true, isLink: false };
+          
+          let type = 'file'; // default to file
+          if (typeInfo.isDir) type = 'directory';
+          else if (typeInfo.isLink) type = 'symlink';
+          
           results.push({
             name,
             type,
-            isDirectory: type === 'dir',
-            isFile: type === 'file',
-            isSymbolicLink: type === 'symlink'
+            isDirectory: typeInfo.isDir,
+            isFile: typeInfo.isFile,
+            isSymbolicLink: typeInfo.isLink
           });
         }
       }
